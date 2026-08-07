@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OLEBase / base — directory listing</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --line:#30363d;
+    --text:#c9d1d9; --dim:#8b949e; --accent:#58a6ff; --mono:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--mono); font-size:14px; line-height:1.5;
+    padding:32px 16px;
+  }
+  .wrap{max-width:820px; margin:0 auto}
+  h1{font-size:16px; font-weight:600; margin:0 0 4px}
+  .path{color:var(--dim); font-size:13px; margin-bottom:20px}
+  .path a{color:var(--accent); text-decoration:none}
+  .path a:hover{text-decoration:underline}
+  .box{border:1px solid var(--line); border-radius:6px; overflow:hidden}
+  .row{
+    display:flex; align-items:center; gap:10px;
+    padding:8px 14px; border-bottom:1px solid var(--line);
+  }
+  .row:last-child{border-bottom:none}
+  .row:hover{background:#1c2128}
+  .icon{width:16px; text-align:center; color:var(--dim); flex-shrink:0}
+  .name{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .name a{color:var(--text); text-decoration:none}
+  .name a:hover{color:var(--accent); text-decoration:underline}
+  .dir .name a{color:var(--accent)}
+  .size{color:var(--dim); font-size:12.5px; min-width:70px; text-align:right}
+  .raw{color:var(--dim); font-size:12px; text-decoration:none; border:1px solid var(--line); border-radius:4px; padding:2px 6px}
+  .raw:hover{color:var(--accent); border-color:var(--accent)}
+  .status{color:var(--dim); padding:20px 4px}
+  .err{color:#f85149}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>OLEBase</h1>
+  <div class="path" id="pathline">Trite699 / OLEBase / <span id="curpath">base</span></div>
+  <div class="box" id="listing">
+    <div class="status">Loading…</div>
+  </div>
+</div>
+
+<script>
+const OWNER = "Trite699";
+const REPO = "OLEBase";
+const BRANCH = "master";
+let currentPath = "base"; // starting folder
+
+const listingEl = document.getElementById("listing");
+const curpathEl = document.getElementById("curpath");
+
+function iconFor(type){ return type === "dir" ? "📁" : "📄"; }
+
+function humanSize(bytes){
+  if (bytes === undefined || bytes === null) return "";
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + " KB";
+  return (bytes/1024/1024).toFixed(1) + " MB";
+}
+
+async function loadPath(path){
+  currentPath = path;
+  curpathEl.textContent = path || "/";
+  listingEl.innerHTML = '<div class="status">Loading…</div>';
+
+  const apiUrl = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}?ref=${BRANCH}`;
+
+  try {
+    const res = await fetch(apiUrl, { headers: { "Accept": "application/vnd.github+json" } });
+    if (!res.ok) {
+      if (res.status === 403) {
+        throw new Error("GitHub API rate-limited (60 req/hr unauthenticated). Try again shortly, or switch to the jsDelivr fallback below.");
+      }
+      throw new Error(`GitHub API error: ${res.status}`);
+    }
+    const data = await res.json();
+    render(Array.isArray(data) ? data : [data], path);
+  } catch (err) {
+    listingEl.innerHTML = `<div class="status err">⚠ ${err.message}</div>`;
+  }
+}
+
+function render(items, path){
+  items.sort((a,b) => {
+    if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  const rows = [];
+
+  if (path) {
+    const parent = path.split("/").slice(0, -1).join("/");
+    rows.push(`
+      <div class="row dir">
+        <span class="icon">📁</span>
+        <span class="name"><a href="#" data-path="${parent}">..</a></span>
+      </div>
+    `);
+  }
+
+  for (const item of items) {
+    if (item.type === "dir") {
+      rows.push(`
+        <div class="row dir">
+          <span class="icon">${iconFor(item.type)}</span>
+          <span class="name"><a href="#" data-path="${item.path}">${item.name}/</a></span>
+          <span class="size"></span>
+        </div>
+      `);
+    } else {
+      const rawUrl = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/${item.path}`;
+      rows.push(`
+        <div class="row file">
+          <span class="icon">${iconFor(item.type)}</span>
+          <span class="name"><a href="${rawUrl}" target="_blank" rel="noopener">${item.name}</a></span>
+          <span class="size">${humanSize(item.size)}</span>
+          <a class="raw" href="${rawUrl}" target="_blank" rel="noopener">raw</a>
+        </div>
+      `);
+    }
+  }
+
+  listingEl.innerHTML = rows.join("");
+
+  listingEl.querySelectorAll("a[data-path]").forEach(a => {
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      loadPath(a.getAttribute("data-path"));
+    });
+  });
+}
+
+loadPath(currentPath);
+</script>
+</body>
+</html>
